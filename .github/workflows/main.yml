@@ -1,29 +1,48 @@
 name: Build and deploy .NET Core web application to Azure App Service
+
 on:
   workflow_dispatch:
   #push:
     #branches:
     #- master
+
+env:
+  AZURE_WEBAPP_NAME: sampleApp-gldemo    # set this to your application's name
+  AZURE_WEBAPP_PACKAGE_PATH: '.'      # set this to the path to your web app project, defaults to the repository root
+  DOTNET_VERSION: '6.0'           # set this to the dot net version to use
+
 jobs:
-  build-and-deploy:
-    runs-on: windows-latest # For Linux, use ubuntu-latest
-    environment: dev
+  build:
+    runs-on: ubuntu-latest
+
     steps:
-    
-    - name: Sign in to Azure 
-    # Use the GitHub secret you added.
-    - uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # Checkout the repo
+      - uses: actions/checkout@main
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       
-    - name: Deploy to Azure Web App
-    # Remove publish-profile.
-    - uses: azure/webapps-deploy@v2
-      with:
-        app-name: 'sampleApp-gldemo'
-        slot-name: 'dev'
-        package: .
+      # Setup .NET Core SDK
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }} 
       
-    - name: Sign out of Azure.
-      run: |
-        az logout
+      # Run dotnet build and publish
+      - name: dotnet build and publish
+        run: |
+          dotnet restore
+          dotnet build --configuration Release
+          dotnet publish -c Release --property:PublishDir='${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp' 
+          
+      # Deploy to Azure Web apps
+      - name: 'Run Azure webapp deploy action using publish profile credentials'
+        uses: azure/webapps-deploy@v2
+        with: 
+          app-name: ${{ env.AZURE_WEBAPP_NAME }} # Replace with your app name
+          package: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
+      
+      - name: logout
+        run: |
+          az logout
